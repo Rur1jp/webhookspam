@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuLu Webhook Spammer</title>
+    <style>
+        body {
+            font-family: 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #36393f;
+            color: #dcddde;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background-color: #2f3136;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px 0 rgba(0, 0, 0, 0.2);
+            text-align: center;
+            width: 450px;
+        }
+        .container h1 {
+            font-size: 1.8em;
+            color: #fff;
+            margin-bottom: 25px;
+        }
+        .input-group {
+            margin-bottom: 18px;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+            color: #8e9297;
+        }
+        .input-group input, .input-group textarea {
+            width: calc(100% - 20px);
+            padding: 12px;
+            border: 1px solid #23272a;
+            border-radius: 4px;
+            font-size: 1em;
+            background-color: #40444b;
+            color: #dcddde;
+            transition: border-color 0.2s ease-in-out;
+        }
+        .input-group input:focus, .input-group textarea:focus {
+            border-color: #7289da;
+            outline: none;
+        }
+        .input-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        button {
+            padding: 12px 25px;
+            font-size: 1em;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 8px;
+            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+        }
+        button#send {
+            background-color: #7289da;
+            color: white;
+        }
+        button#send:hover {
+            background-color: #677bc4;
+        }
+        button#stop {
+            background-color: #f04747;
+            color: white;
+        }
+        button#stop:hover {
+            background-color: #cc3c3c;
+        }
+        button:disabled {
+            background-color: #5b626e;
+            cursor: not-allowed;
+            color: #b7b7b7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RuLu Webhook Spammer</h1>
+        <div class="input-group">
+            <label for="webhook">Webhook URL</label>
+            <input type="url" id="webhook" placeholder="e.g., https://discord.com/api/webhooks/...">
+        </div>
+        <div class="input-group">
+            <label for="username">Username (Optional)</label>
+            <input type="text" id="username" placeholder="e.g., RuLu Bot">
+        </div>
+        <div class="input-group">
+            <label for="avatar_url">Avatar URL (Optional)</label>
+            <input type="url" id="avatar_url" placeholder="e.g., https://example.com/avatar.png">
+        </div>
+        <div class="input-group">
+            <label for="message">Message</label>
+            <textarea id="message" placeholder="Your message here..."></textarea>
+        </div>
+        <div class="input-group">
+            <label for="count">Send Count</label>
+            <input type="number" id="count" min="1" max="1000" value="1">
+        </div>
+        <button id="send">SEND</button>
+        <button id="stop" disabled>STOP</button>
+    </div>
+
+    <script>
+        const sendButton = document.getElementById('send');
+        const stopButton = document.getElementById('stop');
+        let isSending = false;
+        let abortController = null; // To cancel ongoing fetches
+
+        sendButton.addEventListener('click', async () => {
+            const webhookURL = document.getElementById('webhook').value;
+            const message = document.getElementById('message').value;
+            const username = document.getElementById('username').value;
+            const avatarURL = document.getElementById('avatar_url').value;
+            const count = parseInt(document.getElementById('count').value, 10);
+
+            if (!webhookURL || !message || count <= 0) {
+                alert('Please ensure Webhook URL, Message, and Send Count are filled correctly.');
+                return;
+            }
+
+            isSending = true;
+            sendButton.disabled = true;
+            stopButton.disabled = false;
+            abortController = new AbortController(); // New controller for this sending session
+
+            for (let i = 0; i < count; i++) {
+                if (!isSending) { // Check if sending was stopped
+                    console.log('Sending stopped by user.');
+                    break;
+                }
+
+                const payload = {
+                    content: message
+                };
+
+                if (username) {
+                    payload.username = username;
+                }
+                if (avatarURL) {
+                    payload.avatar_url = avatarURL;
+                }
+
+                try {
+                    const response = await fetch(webhookURL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                        signal: abortController.signal // Link fetch to the abort controller
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error(`Error sending message (Status: ${response.status}):`, errorText);
+                        // Optionally, you might want to stop sending on error or show an alert
+                        // alert(`Failed to send message: ${response.status} - ${errorText}`);
+                        // break; // Stop sending on the first error
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to prevent rate limiting
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        console.log('Fetch aborted by user action.');
+                    } else {
+                        console.error('Error sending message:', error);
+                    }
+                    break; // Break loop on any error, including abort
+                }
+            }
+
+            isSending = false;
+            sendButton.disabled = false;
+            stopButton.disabled = true;
+            abortController = null; // Clear the controller
+        });
+
+        stopButton.addEventListener('click', () => {
+            isSending = false; // Signal to stop the loop
+            if (abortController) {
+                abortController.abort(); // Abort any ongoing fetches
+            }
+            stopButton.disabled = true;
+            sendButton.disabled = false;
+        });
+    </script>
+</body>
+</html>
