@@ -176,6 +176,10 @@
             <textarea id="message" placeholder="ここにメッセージを入力..."></textarea>
         </div>
         <div class="input-group">
+            <label for="random_length">メッセージに付加するランダムな英数字の長さ (任意, 0で無効)</label>
+            <input type="number" id="random_length" min="0" value="0">
+        </div>
+        <div class="input-group">
             <label for="count">送信回数</label>
             <input type="number" id="count" min="1" max="1000" value="1">
         </div>
@@ -257,18 +261,30 @@
 
         addWebhookButton.addEventListener('click', addWebhookInputField);
 
+        // ランダムな文字列を生成する関数
+        function generateRandomString(length) {
+            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            const charactersLength = characters.length;
+            for (let i = 0; i < length; i++) {
+                result += characters.charAt(Math.floor(Math.random() * charactersLength));
+            }
+            return result;
+        }
+
         sendButton.addEventListener('click', async () => {
             const webhookURLs = Array.from(document.querySelectorAll('.webhook-input'))
                                     .map(input => input.value.trim())
                                     .filter(url => url !== '');
 
-            const message = document.getElementById('message').value;
+            const baseMessage = document.getElementById('message').value;
             const username = document.getElementById('username').value;
             const avatarURL = document.getElementById('avatar_url').value;
+            const randomLength = parseInt(document.getElementById('random_length').value, 10) || 0; // 0がデフォルト
             const count = parseInt(document.getElementById('count').value, 10);
             const delay = parseInt(document.getElementById('delay').value, 10);
 
-            if (webhookURLs.length === 0 || !message || count <= 0) {
+            if (webhookURLs.length === 0 || !baseMessage || count <= 0) {
                 alert('Webhook URL、メッセージ、送信回数を正しく入力してください。');
                 return;
             }
@@ -280,23 +296,28 @@
             document.querySelectorAll('.remove-webhook-btn').forEach(btn => btn.disabled = true);
             abortController = new AbortController();
 
-            const payload = {
-                content: message
-            };
-
-            if (username) {
-                payload.username = username;
-            }
-            if (avatarURL) {
-                payload.avatar_url = avatarURL;
-            }
-
             addLog('送信を開始しました。', 'success');
 
             for (let i = 0; i < count; i++) {
                 if (!isSending) {
                     addLog('ユーザーによって送信が停止されました。');
                     break;
+                }
+
+                let messageToSend = baseMessage;
+                if (randomLength > 0) {
+                    messageToSend += ' ' + generateRandomString(randomLength);
+                }
+
+                const payload = {
+                    content: messageToSend
+                };
+
+                if (username) {
+                    payload.username = username;
+                }
+                if (avatarURL) {
+                    payload.avatar_url = avatarURL;
                 }
 
                 const fetchPromises = webhookURLs.map(url =>
