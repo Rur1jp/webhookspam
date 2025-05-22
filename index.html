@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rulu webhook spammer</title> <style>
+    <title>Rulu webhook spammer</title>
+    <style>
         body {
             font-family: 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
             background-color: #36393f;
@@ -12,7 +13,9 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh; /* 画面全体の高さに合わせる */
+            padding: 20px; /* 上下のパディングを追加 */
+            box-sizing: border-box; /* パディングを計算に含める */
         }
         .container {
             background-color: #2f3136;
@@ -21,11 +24,12 @@
             box-shadow: 0 2px 10px 0 rgba(0, 0, 0, 0.2);
             text-align: center;
             width: 450px;
+            max-width: 90%; /* 小さい画面でも収まるように最大幅を設定 */
         }
         .container h1 {
-            font-size: 1.5em; /* フォントサイズを小さく */
+            font-size: 1.5em;
             color: #fff;
-            margin-top: 10px; /* 上部のマージンを調整 */
+            margin-top: 10px;
             margin-bottom: 25px;
         }
         .input-group {
@@ -84,14 +88,59 @@
             cursor: not-allowed;
             color: #b7b7b7;
         }
+        .webhook-list {
+            margin-bottom: 20px;
+        }
+        .webhook-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .webhook-item input {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+        .remove-webhook-btn {
+            background-color: #f04747;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+        .remove-webhook-btn:hover {
+            background-color: #cc3c3c;
+        }
+        .add-webhook-btn {
+            background-color: #43b581;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 15px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .add-webhook-btn:hover {
+            background-color: #3aa877;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Rulu webhook spammer</h1> <div class="input-group">
-            <label for="webhook">Webhook URL</label>
-            <input type="url" id="webhook" placeholder="例: https://discord.com/api/webhooks/...">
+        <h1>Rulu webhook spammer</h1>
+
+        <div class="input-group">
+            <label>Webhook URL(s)</label>
+            <div id="webhook-urls" class="webhook-list">
+                <div class="webhook-item">
+                    <input type="url" class="webhook-input" placeholder="例: https://discord.com/api/webhooks/...">
+                    <button class="remove-webhook-btn" style="display:none;">削除</button>
+                </div>
+            </div>
+            <button id="add-webhook" class="add-webhook-btn">Webhook URLを追加</button>
         </div>
+
         <div class="input-group">
             <label for="username">Webhookの名前 (任意)</label>
             <input type="text" id="username" placeholder="例: RuLu Bot">
@@ -115,17 +164,68 @@
     <script>
         const sendButton = document.getElementById('send');
         const stopButton = document.getElementById('stop');
+        const addWebhookButton = document.getElementById('add-webhook');
+        const webhookUrlsContainer = document.getElementById('webhook-urls');
+
         let isSending = false;
-        let abortController = null; // 進行中のフェッチをキャンセルするため
+        let abortController = null;
+
+        // Webhook URL入力フィールドを追加する関数
+        function addWebhookInputField() {
+            const webhookItem = document.createElement('div');
+            webhookItem.classList.add('webhook-item');
+
+            const input = document.createElement('input');
+            input.type = 'url';
+            input.classList.add('webhook-input');
+            input.placeholder = '例: https://discord.com/api/webhooks/...';
+
+            const removeButton = document.createElement('button');
+            removeButton.classList.add('remove-webhook-btn');
+            removeButton.textContent = '削除';
+            removeButton.addEventListener('click', () => {
+                webhookUrlsContainer.removeChild(webhookItem);
+                updateRemoveButtonsVisibility(); // 削除ボタンの表示を更新
+            });
+
+            webhookItem.appendChild(input);
+            webhookItem.appendChild(removeButton);
+            webhookUrlsContainer.appendChild(webhookItem);
+
+            updateRemoveButtonsVisibility(); // 削除ボタンの表示を更新
+        }
+
+        // 削除ボタンの表示/非表示を更新する関数
+        function updateRemoveButtonsVisibility() {
+            const webhookInputs = document.querySelectorAll('.webhook-input');
+            const removeButtons = document.querySelectorAll('.remove-webhook-btn');
+
+            if (webhookInputs.length <= 1) {
+                // 入力フィールドが1つの場合、削除ボタンを非表示にする
+                removeButtons.forEach(btn => btn.style.display = 'none');
+            } else {
+                // 2つ以上の場合、すべて表示する
+                removeButtons.forEach(btn => btn.style.display = 'inline-block');
+            }
+        }
+
+        // 初期状態で削除ボタンの表示を更新
+        updateRemoveButtonsVisibility();
+
+        // Webhook URL追加ボタンのイベントリスナー
+        addWebhookButton.addEventListener('click', addWebhookInputField);
 
         sendButton.addEventListener('click', async () => {
-            const webhookURL = document.getElementById('webhook').value;
+            const webhookURLs = Array.from(document.querySelectorAll('.webhook-input'))
+                                    .map(input => input.value.trim())
+                                    .filter(url => url !== ''); // 空のURLを除外
+
             const message = document.getElementById('message').value;
             const username = document.getElementById('username').value;
             const avatarURL = document.getElementById('avatar_url').value;
             const count = parseInt(document.getElementById('count').value, 10);
 
-            if (!webhookURL || !message || count <= 0) {
+            if (webhookURLs.length === 0 || !message || count <= 0) {
                 alert('Webhook URL、メッセージ、送信回数を正しく入力してください。');
                 return;
             }
@@ -133,10 +233,12 @@
             isSending = true;
             sendButton.disabled = true;
             stopButton.disabled = false;
-            abortController = new AbortController(); // この送信セッション用の新しいコントローラー
+            addWebhookButton.disabled = true; // 送信中は追加ボタンを無効化
+            document.querySelectorAll('.remove-webhook-btn').forEach(btn => btn.disabled = true); // 送信中は削除ボタンを無効化
+            abortController = new AbortController();
 
             for (let i = 0; i < count; i++) {
-                if (!isSending) { // 送信が停止されたかを確認
+                if (!isSending) {
                     console.log('ユーザーによって送信が停止されました。');
                     break;
                 }
@@ -152,45 +254,54 @@
                     payload.avatar_url = avatarURL;
                 }
 
-                try {
-                    const response = await fetch(webhookURL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                        signal: abortController.signal // フェッチをアボートコントローラーにリンク
-                    });
+                for (const url of webhookURLs) {
+                    if (!isSending) break; // 複数URL送信中に停止された場合
 
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error(`メッセージ送信エラー (ステータス: ${response.status}):`, errorText);
-                        // 必要に応じて、エラー発生時に送信を停止したり、アラートを表示したりできます
-                        // alert(`メッセージの送信に失敗しました: ${response.status} - ${errorText}`);
-                        // break; // 最初のエラーで送信を停止
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload),
+                            signal: abortController.signal
+                        });
+
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            console.error(`メッセージ送信エラー (URL: ${url}, ステータス: ${response.status}):`, errorText);
+                            // 必要に応じて、エラー発生時に送信を停止したり、アラートを表示したりできます
+                        }
+                    } catch (error) {
+                        if (error.name === 'AbortError') {
+                            console.log('ユーザー操作によりフェッチが中止されました。');
+                        } else {
+                            console.error('メッセージ送信エラー:', error);
+                        }
+                        isSending = false; // エラーが発生した場合、送信を停止
+                        break; // ループを中断
                     }
-                    await new Promise(resolve => setTimeout(resolve, 500)); // レート制限を防ぐための短い遅延
-                } catch (error) {
-                    if (error.name === 'AbortError') {
-                        console.log('ユーザー操作によりフェッチが中止されました。');
-                    } else {
-                        console.error('メッセージ送信エラー:', error);
-                    }
-                    break; // アボートを含むあらゆるエラーでループを中断
                 }
+                if (!isSending) break; // 内側のループで停止した場合
+
+                await new Promise(resolve => setTimeout(resolve, 500)); // レート制限を防ぐための短い遅延
             }
 
             isSending = false;
             sendButton.disabled = false;
             stopButton.disabled = true;
-            abortController = null; // コントローラーをクリア
+            addWebhookButton.disabled = false; // 送信終了後に追加ボタンを有効化
+            document.querySelectorAll('.remove-webhook-btn').forEach(btn => btn.disabled = false); // 送信終了後に削除ボタンを有効化
+            abortController = null;
         });
 
         stopButton.addEventListener('click', () => {
-            isSending = false; // ループ停止のシグナル
+            isSending = false;
             if (abortController) {
-                abortController.abort(); // 進行中のフェッチを中止
+                abortController.abort();
             }
             stopButton.disabled = true;
             sendButton.disabled = false;
+            addWebhookButton.disabled = false; // 停止後に追加ボタンを有効化
+            document.querySelectorAll('.remove-webhook-btn').forEach(btn => btn.disabled = false); // 停止後に削除ボタンを有効化
         });
     </script>
 </body>
